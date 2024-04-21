@@ -53,6 +53,7 @@ int cmd_login(int argc, char **argv)
 		{"plaintext-key", no_argument, NULL, 'P'},
 		{"force", no_argument, NULL, 'f'},
 		{"color", required_argument, NULL, 'C'},
+    {"sso", no_argument, NULL, 's'},
 		{0, 0, 0, 0}
 	};
 	int option;
@@ -61,8 +62,10 @@ int cmd_login(int argc, char **argv)
 	bool plaintext_key = false;
 	bool force = false;
 	char *username;
+  bool sso = false;
 	_cleanup_free_ char *error = NULL;
 	_cleanup_free_ char *password = NULL;
+  _cleanup_free_ char *fragment = NULL;
 	int iterations;
 	struct session *session;
 	unsigned char key[KDF_HASH_LEN];
@@ -79,6 +82,9 @@ int cmd_login(int argc, char **argv)
 		case 'f':
 			force = true;
 			break;
+    case 's':
+      sso = true;
+      break;
 		case 'C':
 			terminal_set_color_mode(
 				parse_color_mode_string(optarg));
@@ -105,12 +111,17 @@ int cmd_login(int argc, char **argv)
 		if (!password)
 			die("Failed to enter correct password.");
 
+    if (sso) {
+      free(fragment);
+      fragment = password_prompt("SSO Fragment", error, "Please enter the LastPass SSO Fragment for <%s>.", username);
+    }
+
 		kdf_login_key(username, password, iterations, hex);
 		kdf_decryption_key(username, password, iterations, key);
 
 		free(error);
 		error = NULL;
-		session = lastpass_login(username, hex, key, iterations, &error, trust);
+		session = lastpass_login(username, fragment, hex, key, iterations, &error, trust);
 	} while (!session_is_valid(session));
 
 	config_unlink("plaintext_key");
